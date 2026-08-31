@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Minecraft Trade Calculator</title>
+<style>
+  :root {
+    --bg: #101814;
+    --panel: #18241e;
+    --panel2: #213128;
+    --text: #eef7f0;
+    --muted: #a8b8ad;
+    --accent: #78d66b;
+    --border: #31473a;
+    --warn: #ffd37a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Inter, system-ui, Arial, sans-serif;
+    background: linear-gradient(180deg, #0d1511, var(--bg));
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 980px; margin: auto; padding: 32px 18px 60px; }
+  h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 48px); }
+  .sub { color: var(--muted); margin-bottom: 26px; }
+  .card {
+    background: rgba(24,36,30,.94);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.22);
+  }
+  .trade-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 14px;
+    align-items: end;
+  }
+  label { display: block; font-weight: 700; margin-bottom: 8px; }
+  select, input {
+    width: 100%;
+    padding: 13px 14px;
+    border-radius: 11px;
+    border: 1px solid var(--border);
+    background: #0f1914;
+    color: var(--text);
+    font-size: 16px;
+  }
+  .arrow { font-size: 30px; padding-bottom: 8px; color: var(--accent); }
+  .result {
+    margin-top: 20px;
+    padding: 18px;
+    border-radius: 14px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+  }
+  .big { font-size: clamp(24px, 4vw, 36px); font-weight: 800; }
+  .muted { color: var(--muted); }
+  .note { color: var(--warn); margin-top: 10px; font-size: 14px; }
+  .toolbar {
+    margin: 26px 0 12px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .toolbar input { max-width: 390px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    overflow: hidden;
+    border-radius: 14px;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  th { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; }
+  tr:last-child td { border-bottom: 0; }
+  .pill {
+    display: inline-block;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  footer { color: var(--muted); margin-top: 20px; font-size: 13px; }
+  @media (max-width: 680px) {
+    .trade-grid { grid-template-columns: 1fr; }
+    .arrow { transform: rotate(90deg); text-align: center; padding: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⛏️ Minecraft Trade Calculator</h1>
+  <div class="sub">Compare 211+ survival blocks and items using a simple rarity + effort point system. You can edit the values in the JavaScript if your server economy is different.</div>
+
+  <div class="card">
+    <div class="trade-grid">
+      <div>
+        <label for="fromItem">You give</label>
+        <select id="fromItem"></select>
+        <div style="height:10px"></div>
+        <label for="amount">Amount</label>
+        <input id="amount" type="number" min="0" step="1" value="12" />
+      </div>
+
+      <div class="arrow">→</div>
+
+      <div>
+        <label for="toItem">You get</label>
+        <select id="toItem"></select>
+      </div>
+    </div>
+
+    <div class="result">
+      <div class="muted">Fair trade estimate</div>
+      <div class="big" id="resultText">—</div>
+      <div class="muted" id="details"></div>
+      <div class="note">This is a custom survival economy, not an official Mojang price list. Farms, villager trading, server shops, and mods can change what's fair.</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input id="search" placeholder="Search item values..." />
+    <span class="pill">1 point = base value unit</span>
+  </div>
+
+  <div class="card" style="padding:0; overflow:auto;">
+    <table>
+      <thead>
+        <tr><th>Item</th><th>Points each</th><th>Category</th></tr>
+      </thead>
+      <tbody id="valueTable"></tbody>
+    </table>
+  </div>
+
+  <footer>Tip: If your world has an iron farm, gold farm, raid farm, or copper farm, lower those items' point values to keep trades balanced.</footer>
+</div>
+
+<script>
+const items = [
+  {name:'Dirt', value:0.03, cat:'Natural Block'},
+  {name:'Grass Block', value:0.06, cat:'Natural Block'},
+  {name:'Coarse Dirt', value:0.08, cat:'Natural Block'},
+  {name:'Podzol', value:0.12, cat:'Natural Block'},
+  {name:'Mycelium', value:0.35, cat:'Natural Block'},
+  {name:'Mud', value:0.08, cat:'Natural Block'},
+  {name:'Clay Block', value:0.45, cat:'Natural Block'},
+  {name:'Gravel', value:0.09, cat:'Natural Block'},
+  {name:'Sand', value:0.1, cat:'Natural Block'},
+  {name:'Red Sand', value:0.14, cat:'Natural Block'},
+  {name:'Snow Block', value:0.1, cat:'Natural Block'},
+  {name:'Ice', value:0.18, cat:'Natural Block'},
+  {name:'Packed Ice', value:0.65, cat:'Natural Block'},
+  {name:'Blue Ice', value:5.9, cat:'Natural Block'},
+  {name:'Netherrack', value:0.04, cat:'Nether Block'},
+  {name:'Soul Sand', value:0.18, cat:'Nether Block'},
+  {name:'Soul Soil', value:0.22, cat:'Nether Block'},
+  {name:'Basalt', value:0.12, cat:'Nether Block'},
+  {name:'Blackstone', value:0.14, cat:'Nether Block'},
+  {name:'End Stone', value:0.12, cat:'End Block'},
+  {name:'Obsidian', value:3.5, cat:'Block'},
+  {name:'Crying Obsidian', value:7, cat:'Block'},
+  {name:'Calcite', value:0.16, cat:'Natural Block'},
+  {name:'Tuff', value:0.08, cat:'Natural Block'},
+  {name:'Dripstone Block', value:0.18, cat:'Natural Block'},
+  {name:'Moss Block', value:0.14, cat:'Natural Block'},
+  {name:'Cobblestone', value:0.05, cat:'Stone'},
+  {name:'Stone', value:0.08, cat:'Stone'},
+  {name:'Smooth Stone', value:0.12, cat:'Stone'},
+  {name:'Andesite', value:0.08, cat:'Stone'},
+  {name:'Diorite', value:0.08, cat:'Stone'},
+  {name:'Granite', value:0.08, cat:'Stone'},
+  {name:'Deepslate', value:0.1, cat:'Stone'},
+  {name:'Cobbled Deepslate', value:0.08, cat:'Stone'},
+  {name:'Bricks', value:0.55, cat:'Building'},
+  {name:'Stone Bricks', value:0.12, cat:'Building'},
+  {name:'Deepslate Bricks', value:0.14, cat:'Building'},
+  {name:'Quartz Block', value:4.4, cat:'Building'},
+  {name:'Glass', value:0.15, cat:'Building'},
+  {name:'Tinted Glass', value:0.9, cat:'Building'},
+  {name:'Terracotta', value:0.3, cat:'Building'},
+  {name:'White Concrete', value:0.45, cat:'Building'},
+  {name:'Concrete', value:0.45, cat:'Building'},
+  {name:'Wool', value:0.4, cat:'Building'},
+  {name:'Oak Log', value:0.35, cat:'Wood'},
+  {name:'Spruce Log', value:0.35, cat:'Wood'},
+  {name:'Birch Log', value:0.35, cat:'Wood'},
+  {name:'Jungle Log', value:0.4, cat:'Wood'},
+  {name:'Acacia Log', value:0.4, cat:'Wood'},
+  {name:'Dark Oak Log', value:0.45, cat:'Wood'},
+  {name:'Mangrove Log', value:0.45, cat:'Wood'},
+  {name:'Cherry Log', value:0.5, cat:'Wood'},
+  {name:'Pale Oak Log', value:0.5, cat:'Wood'},
+  {name:'Crimson Stem', value:0.55, cat:'Nether Wood'},
+  {name:'Warped Stem', value:0.55, cat:'Nether Wood'},
+  {name:'Bamboo Block', value:0.25, cat:'Wood'},
+  {name:'Coal', value:1.2, cat:'Ore'},
+  {name:'Coal Block', value:10.8, cat:'Ore Block'},
+  {name:'Raw Copper', value:0.9, cat:'Ore'},
+  {name:'Copper Ingot', value:1, cat:'Metal'},
+  {name:'Copper Block', value:9, cat:'Metal Block'},
+  {name:'Cut Copper', value:9.2, cat:'Metal Block'},
+  {name:'Raw Iron', value:3.5, cat:'Ore'},
+  {name:'Iron Ingot', value:4, cat:'Metal'},
+  {name:'Iron Block', value:36, cat:'Metal Block'},
+  {name:'Raw Gold', value:5.2, cat:'Ore'},
+  {name:'Gold Ingot', value:6, cat:'Metal'},
+  {name:'Gold Block', value:54, cat:'Metal Block'},
+  {name:'Redstone Dust', value:0.7, cat:'Ore'},
+  {name:'Redstone Block', value:6.3, cat:'Ore Block'},
+  {name:'Lapis Lazuli', value:0.8, cat:'Ore'},
+  {name:'Lapis Block', value:7.2, cat:'Ore Block'},
+  {name:'Emerald', value:12, cat:'Gem'},
+  {name:'Emerald Block', value:108, cat:'Gem Block'},
+  {name:'Diamond', value:30, cat:'Gem'},
+  {name:'Diamond Block', value:270, cat:'Gem Block'},
+  {name:'Amethyst Shard', value:0.6, cat:'Gem'},
+  {name:'Amethyst Block', value:2.4, cat:'Gem Block'},
+  {name:'Quartz', value:1.1, cat:'Nether'},
+  {name:'Ancient Debris', value:100, cat:'Nether'},
+  {name:'Netherite Scrap', value:108, cat:'Nether'},
+  {name:'Netherite Ingot', value:456, cat:'Nether'},
+  {name:'Netherite Block', value:4104, cat:'Nether'},
+  {name:'Glowstone Dust', value:0.45, cat:'Nether'},
+  {name:'Glowstone', value:2, cat:'Nether'},
+  {name:'Magma Cream', value:3.5, cat:'Nether'},
+  {name:'Blaze Rod', value:8, cat:'Mob Drop'},
+  {name:'Blaze Powder', value:4, cat:'Mob Drop'},
+  {name:'Ghast Tear', value:18, cat:'Mob Drop'},
+  {name:'Wither Skeleton Skull', value:80, cat:'Rare'},
+  {name:'Nether Wart', value:0.7, cat:'Nether'},
+  {name:'Ender Pearl', value:5, cat:'Mob Drop'},
+  {name:'Eye of Ender', value:14, cat:'Crafted'},
+  {name:'Shulker Shell', value:35, cat:'End'},
+  {name:'Dragon Breath', value:10, cat:'End'},
+  {name:'Chorus Fruit', value:0.35, cat:'End'},
+  {name:'Popped Chorus Fruit', value:0.5, cat:'End'},
+  {name:'Elytra', value:450, cat:'End'},
+  {name:'Rotten Flesh', value:0.1, cat:'Mob Drop'},
+  {name:'Bone', value:0.45, cat:'Mob Drop'},
+  {name:'String', value:0.35, cat:'Mob Drop'},
+  {name:'Gunpowder', value:1.1, cat:'Mob Drop'},
+  {name:'Spider Eye', value:0.4, cat:'Mob Drop'},
+  {name:'Slimeball', value:2.5, cat:'Mob Drop'},
+  {name:'Phantom Membrane', value:5, cat:'Mob Drop'},
+  {name:'Rabbit Foot', value:6, cat:'Mob Drop'},
+  {name:'Ink Sac', value:0.25, cat:'Mob Drop'},
+  {name:'Glow Ink Sac', value:0.65, cat:'Mob Drop'},
+  {name:'Leather', value:0.8, cat:'Mob Drop'},
+  {name:'Feather', value:0.15, cat:'Mob Drop'},
+  {name:'Prismarine Shard', value:1.4, cat:'Ocean'},
+  {name:'Prismarine Crystals', value:1.8, cat:'Ocean'},
+  {name:'Nautilus Shell', value:14, cat:'Ocean'},
+  {name:'Heart of the Sea', value:70, cat:'Treasure'},
+  {name:'Sponge', value:25, cat:'Ocean'},
+  {name:'Wet Sponge', value:25, cat:'Ocean'},
+  {name:'Trident', value:140, cat:'Rare'},
+  {name:'Totem of Undying', value:90, cat:'Rare'},
+  {name:'Nether Star', value:280, cat:'Boss'},
+  {name:'Dragon Egg', value:1200, cat:'Unique'},
+  {name:'Heavy Core', value:350, cat:'Rare'},
+  {name:'Breeze Rod', value:12, cat:'Mob Drop'},
+  {name:'Wind Charge', value:2.5, cat:'Mob Drop'},
+  {name:'Ominous Bottle', value:10, cat:'Rare'},
+  {name:'Echo Shard', value:18, cat:'Rare'},
+  {name:'Disc Fragment 5', value:8, cat:'Rare'},
+  {name:'Name Tag', value:12, cat:'Treasure'},
+  {name:'Saddle', value:10, cat:'Treasure'},
+  {name:'Lead', value:3, cat:'Crafted'},
+  {name:'Mending Book', value:55, cat:'Enchanted'},
+  {name:'Unbreaking III Book', value:35, cat:'Enchanted'},
+  {name:'Efficiency V Book', value:45, cat:'Enchanted'},
+  {name:'Silk Touch Book', value:40, cat:'Enchanted'},
+  {name:'Fortune III Book', value:50, cat:'Enchanted'},
+  {name:'Protection IV Book', value:40, cat:'Enchanted'},
+  {name:'Sharpness V Book', value:40, cat:'Enchanted'},
+  {name:'Golden Apple', value:55, cat:'Food'},
+  {name:'Enchanted Golden Apple', value:500, cat:'Treasure'},
+  {name:'Golden Carrot', value:2.2, cat:'Food'},
+  {name:'Cooked Beef', value:0.5, cat:'Food'},
+  {name:'Cooked Porkchop', value:0.5, cat:'Food'},
+  {name:'Cooked Chicken', value:0.35, cat:'Food'},
+  {name:'Bread', value:0.22, cat:'Food'},
+  {name:'Baked Potato', value:0.18, cat:'Food'},
+  {name:'Cake', value:2.2, cat:'Food'},
+  {name:'Pumpkin Pie', value:0.45, cat:'Food'},
+  {name:'Honey Bottle', value:0.5, cat:'Food'},
+  {name:'Honey Block', value:2, cat:'Block'},
+  {name:'Wheat', value:0.1, cat:'Farm'},
+  {name:'Carrot', value:0.1, cat:'Farm'},
+  {name:'Potato', value:0.1, cat:'Farm'},
+  {name:'Beetroot', value:0.1, cat:'Farm'},
+  {name:'Sugar Cane', value:0.12, cat:'Farm'},
+  {name:'Bamboo', value:0.06, cat:'Farm'},
+  {name:'Cactus', value:0.12, cat:'Farm'},
+  {name:'Pumpkin', value:0.3, cat:'Farm'},
+  {name:'Melon', value:0.25, cat:'Farm'},
+  {name:'Cocoa Beans', value:0.18, cat:'Farm'},
+  {name:'Kelp', value:0.04, cat:'Farm'},
+  {name:'Sea Pickle', value:0.25, cat:'Ocean'},
+  {name:'Scute', value:6, cat:'Mob Drop'},
+  {name:'Turtle Egg', value:5, cat:'Rare'},
+  {name:'Armored Armadillo Scute', value:1.2, cat:'Mob Drop'},
+  {name:'Paper', value:0.12, cat:'Crafted'},
+  {name:'Book', value:0.45, cat:'Crafted'},
+  {name:'Bookshelf', value:1.8, cat:'Building'},
+  {name:'Torch', value:0.1, cat:'Utility'},
+  {name:'Lantern', value:0.7, cat:'Utility'},
+  {name:'Soul Lantern', value:0.9, cat:'Utility'},
+  {name:'Chest', value:0.7, cat:'Utility'},
+  {name:'Barrel', value:0.7, cat:'Utility'},
+  {name:'Hopper', value:21, cat:'Redstone'},
+  {name:'Piston', value:5, cat:'Redstone'},
+  {name:'Sticky Piston', value:7.5, cat:'Redstone'},
+  {name:'Observer', value:3.5, cat:'Redstone'},
+  {name:'Dispenser', value:3.2, cat:'Redstone'},
+  {name:'Dropper', value:1.2, cat:'Redstone'},
+  {name:'Repeater', value:1.8, cat:'Redstone'},
+  {name:'Comparator', value:4, cat:'Redstone'},
+  {name:'Target', value:0.8, cat:'Redstone'},
+  {name:'Crafter', value:8, cat:'Redstone'},
+  {name:'Rail', value:0.45, cat:'Transport'},
+  {name:'Powered Rail', value:2.4, cat:'Transport'},
+  {name:'Minecart', value:20, cat:'Transport'},
+  {name:'Boat', value:1.8, cat:'Transport'},
+  {name:'Ender Chest', value:34, cat:'Utility'},
+  {name:'Shulker Box', value:72, cat:'Utility'},
+  {name:'Beacon', value:310, cat:'Boss'},
+  {name:'Conduit', value:135, cat:'Ocean'},
+  {name:'Respawn Anchor', value:18, cat:'Nether'},
+  {name:'Brewing Stand', value:9, cat:'Utility'},
+  {name:'Enchanting Table', value:68, cat:'Utility'},
+  {name:'Anvil', value:124, cat:'Utility'},
+  {name:'Smithing Table', value:4.5, cat:'Utility'},
+  {name:'Stonecutter', value:4.2, cat:'Utility'},
+  {name:'Iron Sword', value:9, cat:'Gear'},
+  {name:'Diamond Sword', value:64, cat:'Gear'},
+  {name:'Netherite Sword', value:500, cat:'Gear'},
+  {name:'Iron Pickaxe', value:13, cat:'Gear'},
+  {name:'Diamond Pickaxe', value:94, cat:'Gear'},
+  {name:'Netherite Pickaxe', value:530, cat:'Gear'},
+  {name:'Diamond Helmet', value:155, cat:'Gear'},
+  {name:'Diamond Chestplate', value:245, cat:'Gear'},
+  {name:'Diamond Leggings', value:215, cat:'Gear'},
+  {name:'Diamond Boots', value:125, cat:'Gear'},
+  {name:'Shield', value:5, cat:'Gear'},
+  {name:'Bow', value:2.5, cat:'Gear'},
+  {name:'Crossbow', value:5, cat:'Gear'},
+  {name:'Fishing Rod', value:1.2, cat:'Gear'},
+  {name:'Spyglass', value:3.5, cat:'Utility'},
+  {name:'Brush', value:1.5, cat:'Utility'}
+];
+
+const from = document.getElementById("fromItem");
+const to = document.getElementById("toItem");
+const amount = document.getElementById("amount");
+const resultText = document.getElementById("resultText");
+const details = document.getElementById("details");
+const table = document.getElementById("valueTable");
+const search = document.getElementById("search");
+
+function populateSelects() {
+  items.forEach((item, i) => {
+    from.add(new Option(item.name, i));
+    to.add(new Option(item.name, i));
+  });
+  from.value = items.findIndex(i => i.name === "Copper Block");
+  to.value = items.findIndex(i => i.name === "Netherite Scrap");
+}
+
+function fmt(n) {
+  if (!Number.isFinite(n)) return "0";
+  if (n >= 100) return n.toFixed(1).replace(".0","");
+  if (n >= 10) return n.toFixed(2).replace(/\.?0+$/,"");
+  return n.toFixed(3).replace(/\.?0+$/,"");
+}
+
+function calculate() {
+  const a = Math.max(0, parseFloat(amount.value) || 0);
+  const x = items[+from.value];
+  const y = items[+to.value];
+  const total = a * x.value;
+  const converted = total / y.value;
+  resultText.textContent = `${fmt(a)} ${x.name} ≈ ${fmt(converted)} ${y.name}`;
+  details.textContent = `${fmt(total)} total points ÷ ${fmt(y.value)} points each`;
+}
+
+function renderTable(filter="") {
+  table.innerHTML = "";
+  items
+    .filter(i => i.name.toLowerCase().includes(filter.toLowerCase()) || i.cat.toLowerCase().includes(filter.toLowerCase()))
+    .sort((a,b) => a.value-b.value)
+    .forEach(i => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${i.name}</td><td>${fmt(i.value)}</td><td>${i.cat}</td>`;
+      table.appendChild(tr);
+    });
+}
+
+[from, to, amount].forEach(el => el.addEventListener("input", calculate));
+search.addEventListener("input", e => renderTable(e.target.value));
+
+populateSelects();
+renderTable();
+calculate();
+</script>
+</body>
+</html>
